@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>调色台 · 数字混色 vs 真实颜料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    --bg: #DAD7C7;
+    --surface: #F2EFE3;
+    --surface-2: #E7E2D2;
+    --text: #2A241E;
+    --text-muted: #6B6152;
+    --accent: #8A4632;
+    --accent-soft: #E3C9BB;
+    --border: #C7C0A9;
+    --shadow: rgba(42, 36, 30, 0.14);
+
+    --font-display: "Fraunces", Georgia, "Songti SC", serif;
+    --font-ui: "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #201B16; --surface: #2B241D; --surface-2: #352C23;
+      --text: #EDE6D9; --text-muted: #A79A87; --accent: #D08A66;
+      --accent-soft: #4A362C; --border: #473C31; --shadow: rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #201B16; --surface: #2B241D; --surface-2: #352C23;
+    --text: #EDE6D9; --text-muted: #A79A87; --accent: #D08A66;
+    --accent-soft: #4A362C; --border: #473C31; --shadow: rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.hero { margin-bottom: 8px; }
+  header.hero h1 {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(32px, 5vw, 48px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.01em;
+  }
+  header.hero p { max-width: 560px; color: var(--text-muted); font-size: 16px; line-height: 1.6; margin: 0; }
+
+  .controls-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; margin-top: 24px; }
+  .control-group .group-title { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+
+  .pill-toggle { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px; }
+  .pill-toggle button {
+    appearance: none; border: none; background: transparent; color: var(--text-muted);
+    font-family: var(--font-ui); font-size: 14px; font-weight: 600; padding: 9px 18px;
+    border-radius: 999px; cursor: pointer; transition: background .18s ease, color .18s ease;
+  }
+  .pill-toggle button.active { background: var(--accent); color: #fff; }
+  .pill-toggle.secondary button { font-size: 13px; padding: 7px 14px; }
+
+  main.layout { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 26px; }
+  @media (min-width: 880px) { main.layout { grid-template-columns: 300px 1fr; align-items: start; } }
+  /* 颜料架比右列矮，滚动时钉住，随时可以往里加颜料 */
+  @media (min-width: 880px) { .palette-panel { position: sticky; top: 14px; } }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; }
+  .panel h2 { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--text-muted); margin: 0 0 12px; }
+  .panel h3.sub { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin: 12px 0 8px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .panel-head h2 { margin: 0; }
+  .panel-head .hint { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .panel-head .right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .panel-head .ghost-btn { border: none; background: none; font-family: var(--font-ui); font-size: 12px; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: 7px; }
+  .panel-head .ghost-btn:hover { background: var(--surface-2); color: var(--text); }
+
+  .pigment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .pigment-tube {
+    appearance: none; border: 2px solid transparent; background: transparent; padding: 4px;
+    border-radius: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: border-color .15s ease, transform .1s ease;
+  }
+  .pigment-tube:hover { transform: translateY(-1px); }
+  .pigment-tube.selected { border-color: var(--accent); }
+  .pigment-tube .swatch { width: 36px; height: 36px; border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); position: relative; }
+  .pigment-tube .swatch.mineral::after {
+    content: ''; position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--accent); border: 1.5px solid var(--surface);
+  }
+  .pigment-tube .label { font-size: 10.5px; color: var(--text-muted); text-align: center; line-height: 1.25; }
+  .palette-tip { font-size: 11.5px; color: var(--text-muted); margin-top: 12px; line-height: 1.6; }
+
+  .mix-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .mix-row { display: grid; grid-template-columns: 16px 1fr 20px; align-items: center; gap: 10px; padding: 5px 0; }
+  .mix-row + .mix-row { border-top: 1px solid var(--surface-2); }
+  .mix-row .dot { width: 16px; height: 16px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); }
+  .mix-row .amount-line { min-width: 0; }
+  .mix-row .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .mix-row .name { font-size: 13px; }
+  .mix-row .value { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .mix-row input[type=range] { width: 100%; margin: 1px 0 0; accent-color: var(--accent); }
+  .mix-row .remove { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; width: 20px; height: 20px; border-radius: 6px; }
+  .mix-row .remove:hover { background: var(--surface-2); color: var(--text); }
+
+  .empty-mix { font-size: 13px; color: var(--text-muted); padding: 14px 2px 16px; }
+
+  .save-row { display: flex; gap: 8px; margin-top: 14px; }
+  .save-row input[type=text] {
+    flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    border-radius: 8px; padding: 8px 10px; font-family: var(--font-ui); font-size: 13px;
+  }
+  .save-row button {
+    font-family: var(--font-ui); font-size: 12.5px; border-radius: 8px; padding: 8px 12px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text); white-space: nowrap;
+  }
+  .save-row button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .save-status { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; min-height: 14px; }
+
+  .results-panel { display: flex; flex-direction: column; gap: 14px; }
+
+  .target-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .target-card .swatch { width: 56px; height: 56px; border-radius: 12px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); transition: background-color .25s ease; }
+  .target-card .info { flex: 1; min-width: 160px; }
+  .target-card .info .title { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+  .target-card .score-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 8px; }
+  .target-card .score-bar > span { display: block; height: 100%; background: var(--accent); transition: width .25s ease; }
+  .target-card .score-label { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .target-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .target-actions button { font-family: var(--font-ui); font-size: 12.5px; border-radius: 8px; padding: 8px 12px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+  .target-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .recipe-reveal { margin-top: 4px; font-size: 12.5px; color: var(--text-muted); border-top: 1px dashed var(--border); padding-top: 10px; }
+  .recipe-reveal span.chip, .recipe-mini span.chip { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-2); border-radius: 999px; padding: 3px 9px 3px 5px; margin: 3px 4px 0 0; font-size: 12px; }
+  .recipe-reveal .chip i, .recipe-mini .chip i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 520px) { .cards-row { grid-template-columns: 1fr; } }
+
+  .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 6px 16px var(--shadow); }
+  .result-card .swatch { height: 124px; transition: background-color .25s ease; }
+  .result-card .meta { padding: 12px 16px 14px; }
+  .result-card .meta .kind { font-size: 12.5px; font-weight: 600; margin-bottom: 3px; }
+  .result-card .meta .caption { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px; }
+  .result-card .meta .hex { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-muted); }
+
+  .insight { background: var(--surface-2); border-radius: 12px; padding: 14px 16px; font-size: 13px; line-height: 1.6; color: var(--text); }
+  .insight strong { color: var(--accent); }
+  .insight .note-line { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); color: var(--text-muted); font-size: 12.5px; }
+
+  .fallback-note { font-size: 11.5px; color: var(--text-muted); margin-top: -8px; }
+
+  .empty-results { border: 1px dashed var(--border); border-radius: 16px; padding: 48px 20px; text-align: center; color: var(--text-muted); font-size: 14px; }
+
+  .recipes-panel { margin-top: 28px; }
+  .recipes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .recipe-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .recipe-card .swatches { display: flex; gap: 6px; margin-bottom: 10px; }
+  .recipe-card .swatches div { flex: 1; height: 44px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .recipe-card .name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .recipe-card .meta-line { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; }
+  .recipe-card .recipe-mini { margin-bottom: 10px; }
+  .recipe-card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .recipe-card .actions button { font-family: var(--font-ui); font-size: 11.5px; border-radius: 7px; padding: 6px 9px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+  .recipe-card .actions button.danger:hover { color: #B0402E; border-color: #B0402E; }
+  .recipes-empty { font-size: 13px; color: var(--text-muted); }
+
+  footer.note { margin-top: 40px; font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+
+  .img-modal {
+    position: fixed; inset: 0; background: rgba(20,17,13,0.72);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    z-index: 100;
+  }
+  .img-modal .sheet {
+    background: var(--surface); border-radius: 16px; padding: 18px;
+    max-width: 480px; width: 100%; max-height: 90vh; overflow: auto;
+  }
+  .img-modal img { width: 100%; border-radius: 10px; display: block; box-shadow: 0 6px 20px var(--shadow); }
+  .img-modal .hint { font-size: 13px; color: var(--text-muted); margin: 12px 0 4px; line-height: 1.6; }
+  .img-modal .close-btn {
+    margin-top: 12px; width: 100%; font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+    padding: 10px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="hero">
+    <h1>调色台</h1>
+    <p>同一个配方，<strong>数字混色</strong>用软件默认的 RGB 平均算法，<strong>颜料混色</strong>模拟真实颜料在所选画种里的光学效果。左边选颜料、右边调比例，混色结果就在下方同步更新。亲手调一次，就明白为什么屏幕上调的色和画布上的不一样。</p>
+  </header>
+
+  <div class="controls-row">
+    <div class="control-group">
+      <div class="group-title">练习方式</div>
+      <div class="pill-toggle" id="modeToggle">
+        <button data-mode="free" class="active">自由练习</button>
+        <button data-mode="challenge">挑战模式</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <div class="group-title">颜料材质</div>
+      <div class="pill-toggle secondary" id="mediaToggle">
+        <button data-media="watercolor" class="active">水彩</button>
+        <button data-media="guohua">国画</button>
+        <button data-media="acrylic">丙烯</button>
+        <button data-media="oil">油画</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="layout">
+    <section class="panel palette-panel">
+      <h2>颜料架 · 点选加入</h2>
+
+      <h3 class="sub">西画常用</h3>
+      <div class="pigment-grid" id="pigmentGridWest"></div>
+
+      <h3 class="sub">国画 / 水彩常用</h3>
+      <div class="pigment-grid" id="pigmentGridGuohua"></div>
+
+      <div class="palette-tip">已在调色盘里的颜料会带上边框，再点一下就能移除。</div>
+    </section>
+
+    <section class="results-panel">
+
+      <div class="panel mix-panel">
+        <div class="panel-head">
+          <h2>调色盘 · 拖动滑块改比例</h2>
+          <div class="right">
+            <span class="hint" id="mixCount"></span>
+            <button class="ghost-btn" id="resetBtn">清空</button>
+          </div>
+        </div>
+        <div class="mix-list" id="mixList"></div>
+        <div class="empty-mix" id="emptyMix">还没有加入颜料。点左边颜料架里的颜色，它们会出现在这里。</div>
+
+        <div class="save-row">
+          <input type="text" id="recipeNameInput" placeholder="给这个配方起个名字">
+          <button class="primary" id="saveRecipeBtn">保存配方</button>
+        </div>
+        <div class="save-status" id="saveStatus"></div>
+      </div>
+
+      <div id="targetSection" style="display:none;">
+        <div class="target-card">
+          <div class="swatch" id="targetSwatch"></div>
+          <div class="info">
+            <div class="title">目标色</div>
+            <div class="score-bar"><span id="scoreBar" style="width:0%"></span></div>
+            <div class="score-label" id="scoreLabel">调整上面的颜料比例，靠近这个目标色</div>
+          </div>
+          <div class="target-actions">
+            <button id="newTargetBtn">换一个</button>
+            <button id="revealBtn" class="primary">揭晓配方</button>
+          </div>
+        </div>
+        <div class="recipe-reveal" id="recipeReveal" style="display:none;"></div>
+      </div>
+
+      <div id="cardsWrap">
+        <div class="empty-results" id="emptyResults">调色盘是空的。在上面加入几种颜料，这里会同时显示两种混色结果。</div>
+        <div class="cards-row" id="cardsRow" style="display:none;">
+          <div class="result-card">
+            <div class="swatch" id="digitalSwatch"></div>
+            <div class="meta">
+              <div class="kind">数字混色</div>
+              <div class="caption">RGB 数值线性平均 —— 大多数绘画软件吸管 / 混色器的做法，不区分画种</div>
+              <div class="hex" id="digitalHex">—</div>
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="swatch" id="pigmentSwatch"></div>
+            <div class="meta">
+              <div class="kind">颜料混色</div>
+              <div class="caption" id="pigmentCaption">模拟真实颜料的光学吸收（Kubelka–Munk 原理）</div>
+              <div class="hex" id="pigmentHex">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insight" id="insight" style="display:none;"></div>
+      <div class="fallback-note" id="fallbackNote" style="display:none;">（真实颜料引擎未能加载，当前使用近似算法，趋势正确但精度略低）</div>
+
+    </section>
+  </main>
+
+  <section class="panel recipes-panel">
+    <h2>我的配方</h2>
+    <div class="recipes-empty" id="recipesEmpty">还没有保存的配方。调好一个喜欢的颜色后，在调色盘里给它起个名字保存吧。</div>
+    <div class="recipes-grid" id="recipesGrid"></div>
+  </section>
+
+  <footer class="note">
+    颜料混色效果基于 <strong>Mixbox</strong>（scrtwpns/mixbox，Kubelka–Munk 光学颜料混合模型）计算，供个人学习与练习使用。画种差异（透明度、干湿变化）为经验性模拟，不代表精确的介质光谱数据。
+  </footer>
+
+</div>
+
+<script type="module">
+  try {
+    const mixbox = await import('https://cdn.jsdelivr.net/npm/mixbox@2.0.0/+esm');
+    window.__mixboxLib = mixbox.default || mixbox;
+    window.__mixboxAvailable = true;
+  } catch (e) {
+    window.__mixboxAvailable = false;
+  }
+  window.dispatchEvent(new CustomEvent('mixbox:settled'));
+</script>
+
+<script>
+(function () {
+  const PALETTE = [
+    { name: '钛白',     en: 'Titanium White',      hex: '#FDFDFB', group: 'west',   tag: null },
+    { name: '镉黄',     en: 'Cadmium Yellow',       hex: '#FEEC00', group: 'west',   tag: null },
+    { name: '汉莎黄',   en: 'Hansa Yellow',         hex: '#FCD300', group: 'west',   tag: null },
+    { name: '镉橙',     en: 'Cadmium Orange',       hex: '#FF6900', group: 'west',   tag: null },
+    { name: '镉红',     en: 'Cadmium Red',          hex: '#FF2702', group: 'west',   tag: null },
+    { name: '喹吖啶红', en: 'Quinacridone Magenta', hex: '#80022E', group: 'west',   tag: null },
+    { name: '钴紫',     en: 'Cobalt Violet',        hex: '#4E0042', group: 'west',   tag: null },
+    { name: '群青',     en: 'Ultramarine Blue',     hex: '#190059', group: 'west',   tag: null },
+    { name: '钴蓝',     en: 'Cobalt Blue',          hex: '#002185', group: 'west',   tag: null },
+    { name: '酞菁蓝',   en: 'Phthalo Blue',         hex: '#0D1B44', group: 'west',   tag: null },
+    { name: '酞菁绿',   en: 'Phthalo Green',        hex: '#003C32', group: 'west',   tag: null },
+    { name: '永固绿',   en: 'Permanent Green',      hex: '#076D16', group: 'west',   tag: null },
+    { name: '树汁绿',   en: 'Sap Green',            hex: '#6B9404', group: 'west',   tag: null },
+    { name: '赭石',     en: 'Burnt Sienna',         hex: '#7B4800', group: 'west',   tag: 'mineral' },
+    { name: '象牙黑',   en: 'Ivory Black',          hex: '#1C1913', group: 'west',   tag: null },
+    { name: '朱红',     en: 'Vermilion',            hex: '#E4451D', group: 'guohua', tag: 'mineral' },
+    { name: '曙红',     en: 'Rose Red',             hex: '#E0355B', group: 'guohua', tag: 'plant' },
+    { name: '藤黄',     en: 'Gamboge',              hex: '#F5B400', group: 'guohua', tag: 'plant' },
+    { name: '柠檬黄',   en: 'Lemon Yellow',         hex: '#E8E61C', group: 'guohua', tag: 'plant' },
+    { name: '花青',     en: 'Huaqing (Indigo)',     hex: '#274B5E', group: 'guohua', tag: 'plant' },
+    { name: '胭脂',     en: 'Rouge Carmine',        hex: '#96233A', group: 'guohua', tag: 'plant' },
+  ];
+
+  const PAPER = { r: 248, g: 244, b: 233 };
+  const MEDIA = {
+    watercolor: { name: '水彩', transparent: true,  dryShiftL: +2, note: '深浅靠加水稀释、露出纸底' },
+    guohua:     { name: '国画', transparent: true,  dryShiftL: 0,  note: '水色靠稀释变浅，矿物颜料更接近不透明' },
+    acrylic:    { name: '丙烯', transparent: false, dryShiftL: -4, note: '不透明，变浅需调入白色；干后会略微变深' },
+    oil:        { name: '油画', transparent: false, dryShiftL: 0,  note: '不透明，变浅需调入白色' },
+  };
+
+  const MAX_MIX = 6;
+  let mix = [];
+  let mode = 'free';
+  let medium = 'watercolor';
+  let target = null;
+  let usedFallback = false;
+  let savedRecipes = [];
+
+  // ---------- color helpers ----------
+  function hexToRgb(hex) {
+    const v = hex.replace('#', '');
+    return { r: parseInt(v.slice(0,2),16), g: parseInt(v.slice(2,4),16), b: parseInt(v.slice(4,6),16) };
+  }
+  function rgbToHex(c) {
+    const cl = v => Math.max(0, Math.min(255, Math.round(v)));
+    return '#' + [cl(c.r), cl(c.g), cl(c.b)].map(x => x.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+  function rgbCss(c) { return `rgb(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)})`; }
+
+  function srgbToLinear(c){ c/=255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+  function linearToSrgb(c){ return c<=0.0031308 ? 12.92*c : 1.055*Math.pow(c,1/2.4)-0.055; }
+  function rgbToLab(c){
+    const r=srgbToLinear(c.r), g=srgbToLinear(c.g), b=srgbToLinear(c.b);
+    const x=(r*0.4124+g*0.3576+b*0.1805)/0.95047;
+    const y=(r*0.2126+g*0.7152+b*0.0722)/1.0;
+    const z=(r*0.0193+g*0.1192+b*0.9505)/1.08883;
+    const f = t => t>0.008856 ? Math.cbrt(t) : (7.787*t + 16/116);
+    const fx=f(x), fy=f(y), fz=f(z);
+    return { L: 116*fy-16, a: 500*(fx-fy), b: 200*(fy-fz) };
+  }
+  function labToRgb(lab){
+    const refX=95.047, refY=100.0, refZ=108.883;
+    const fy=(lab.L+16)/116, fx=lab.a/500+fy, fz=fy-lab.b/200;
+    const inv = t => { const t3=t*t*t; return t3>0.008856 ? t3 : (t-16/116)/7.787; };
+    const x=refX*inv(fx)/100, y=refY*inv(fy)/100, z=refZ*inv(fz)/100;
+    let r = x*3.2406 + y*-1.5372 + z*-0.4986;
+    let g = x*-0.9689 + y*1.8758 + z*0.0415;
+    let b = x*0.0557 + y*-0.2040 + z*1.0570;
+    r=linearToSrgb(r); g=linearToSrgb(g); b=linearToSrgb(b);
+    return { r: Math.max(0,Math.min(255,r*255)), g: Math.max(0,Math.min(255,g*255)), b: Math.max(0,Math.min(255,b*255)) };
+  }
+  function deltaE(c1, c2){
+    const l1=rgbToLab(c1), l2=rgbToLab(c2);
+    return Math.sqrt((l1.L-l2.L)**2 + (l1.a-l2.a)**2 + (l1.b-l2.b)**2);
+  }
+
+  // ---------- mixing engines ----------
+  function baseDigitalMix(list) {
+    const total = list.reduce((s,p)=>s+p.amount,0);
+    if (total <= 0) return null;
+    let r=0,g=0,b=0;
+    list.forEach(p=>{
+      const c = hexToRgb(PALETTE[p.idx].hex);
+      const w = p.amount/total;
+      r+=c.r*w; g+=c.g*w; b+=c.b*w;
+    });
+    return {r,g,b};
+  }
+
+  function fallbackPigmentMix(list) {
+    const total = list.reduce((s,p)=>s+p.amount,0);
+    if (total <= 0) return null;
+    let r=1,g=1,b=1;
+    list.forEach(p=>{
+      const c = hexToRgb(PALETTE[p.idx].hex);
+      const w = p.amount/total;
+      r *= Math.pow(Math.max(c.r/255, 0.002), w);
+      g *= Math.pow(Math.max(c.g/255, 0.002), w);
+      b *= Math.pow(Math.max(c.b/255, 0.002), w);
+    });
+    return { r: r*255, g: g*255, b: b*255 };
+  }
+
+  function realPigmentMix(list) {
+    try {
+      if (!window.__mixboxAvailable || !window.__mixboxLib) return null;
+      const mb = window.__mixboxLib;
+      const latentSize = mb.LATENT_SIZE || 7;
+      const total = list.reduce((s,p)=>s+p.amount,0);
+      if (total <= 0) return null;
+      const zMix = new Array(latentSize).fill(0);
+      list.forEach(p=>{
+        const c = hexToRgb(PALETTE[p.idx].hex);
+        const w = p.amount/total;
+        const z = mb.rgbToLatent(rgbCss(c));
+        for (let i=0;i<latentSize;i++) zMix[i] += w*z[i];
+      });
+      let out = mb.latentToRgb(zMix);
+      if (Array.isArray(out)) return { r: out[0], g: out[1], b: out[2] };
+      if (out && typeof out === 'object' && 'r' in out) return out;
+      if (typeof out === 'string') {
+        const m = out.match(/[\d.]+/g);
+        if (m && m.length >= 3) return { r:+m[0], g:+m[1], b:+m[2] };
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function basePigmentMix(list) {
+    const real = realPigmentMix(list);
+    if (real) { usedFallback = false; return real; }
+    usedFallback = true;
+    return fallbackPigmentMix(list);
+  }
+
+  function applyMedium(rawColor, list) {
+    if (!rawColor) return null;
+    const m = MEDIA[medium];
+    let c = rawColor;
+    if (m.transparent) {
+      const total = list.reduce((s,p)=>s+p.amount,0);
+      const coverage = Math.min(1, Math.max(0.15, total/180));
+      c = {
+        r: PAPER.r + (c.r-PAPER.r)*coverage,
+        g: PAPER.g + (c.g-PAPER.g)*coverage,
+        b: PAPER.b + (c.b-PAPER.b)*coverage,
+      };
+    }
+    if (m.dryShiftL) {
+      const lab = rgbToLab(c);
+      lab.L = Math.max(0, Math.min(100, lab.L + m.dryShiftL));
+      c = labToRgb(lab);
+    }
+    return c;
+  }
+
+  function pigmentDisplay(list) { return applyMedium(basePigmentMix(list), list); }
+
+  // ---------- rendering ----------
+  const gridWest = document.getElementById('pigmentGridWest');
+  const gridGuohua = document.getElementById('pigmentGridGuohua');
+  const mixListEl = document.getElementById('mixList');
+  const emptyMix = document.getElementById('emptyMix');
+  const emptyResults = document.getElementById('emptyResults');
+  const cardsRow = document.getElementById('cardsRow');
+  const insight = document.getElementById('insight');
+  const fallbackNote = document.getElementById('fallbackNote');
+  const targetSection = document.getElementById('targetSection');
+  const recipeReveal = document.getElementById('recipeReveal');
+  const pigmentCaption = document.getElementById('pigmentCaption');
+  const saveStatus = document.getElementById('saveStatus');
+  const mixCount = document.getElementById('mixCount');
+  const resetBtn = document.getElementById('resetBtn');
+
+  function renderPaletteGrid(container, group) {
+    container.innerHTML = '';
+    PALETTE.forEach((p, idx) => {
+      if (p.group !== group) return;
+      const btn = document.createElement('button');
+      btn.className = 'pigment-tube' + (mix.some(m=>m.idx===idx) ? ' selected' : '');
+      btn.title = `${p.name} · ${p.en}`;
+      const mineralClass = p.tag === 'mineral' ? ' mineral' : '';
+      btn.innerHTML = `<span class="swatch${mineralClass}" style="background:${p.hex}"></span><span class="label">${p.name}</span>`;
+      btn.addEventListener('click', () => toggleAdd(idx));
+      container.appendChild(btn);
+    });
+  }
+  function renderPalette() {
+    renderPaletteGrid(gridWest, 'west');
+    renderPaletteGrid(gridGuohua, 'guohua');
+  }
+
+  function flashNotice(msg) {
+    saveStatus.textContent = msg;
+    clearTimeout(flashNotice._t);
+    flashNotice._t = setTimeout(() => {
+      if (saveStatus.textContent === msg) saveStatus.textContent = '';
+    }, 2200);
+  }
+
+  // 颜料架上点一下加入调色盘，再点一下移除
+  function toggleAdd(idx) {
+    if (mix.some(m => m.idx === idx)) { removeFrom(idx); return; }
+    if (mix.length >= MAX_MIX) { flashNotice(`调色盘最多同时放 ${MAX_MIX} 种颜料`); return; }
+    mix.push({ idx, amount: 50 });
+    render();
+  }
+  function removeFrom(idx) { mix = mix.filter(m=>m.idx!==idx); render(); }
+
+  // 每行右侧显示的是"占全部颜料的比例"，这比滑块本身的数值更有意义
+  function updateMixPercent() {
+    const total = mix.reduce((s,m)=>s+m.amount,0) || 1;
+    mixListEl.querySelectorAll('.mix-row').forEach(row => {
+      const idx = +row.querySelector('input[type=range]').dataset.idx;
+      const item = mix.find(m => m.idx === idx);
+      if (!item) return;
+      const pct = Math.round(item.amount / total * 100);
+      row.querySelector('.value').textContent = pct + '%';
+    });
+  }
+
+  function buildMixRow(m) {
+    const p = PALETTE[m.idx];
+    const row = document.createElement('div');
+    row.className = 'mix-row';
+
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = p.hex;
+
+    const line = document.createElement('div');
+    line.className = 'amount-line';
+
+    const head = document.createElement('div');
+    head.className = 'head';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = p.name;
+    const val = document.createElement('span');
+    val.className = 'value';
+    head.append(name, val);
+
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = '1';
+    range.max = '100';
+    range.value = String(m.amount);
+    range.dataset.idx = String(m.idx);
+    range.setAttribute('aria-label', p.name + ' 用量');
+    range.addEventListener('input', () => {
+      const item = mix.find(x => x.idx === m.idx);
+      if (!item) return;
+      item.amount = +range.value;
+      // 拖动时只刷新数值和结果，不重建列表，否则滑块会掉焦点、拖不动
+      updateMixPercent();
+      renderResults();
+    });
+
+    line.append(head, range);
+
+    const rm = document.createElement('button');
+    rm.className = 'remove';
+    rm.type = 'button';
+    rm.textContent = '×';
+    rm.title = `移除${p.name}`;
+    rm.addEventListener('click', () => removeFrom(m.idx));
+
+    row.append(dot, line, rm);
+    return row;
+  }
+
+  function renderMixList() {
+    mixListEl.innerHTML = '';
+    emptyMix.style.display = mix.length ? 'none' : 'block';
+    mixCount.textContent = mix.length ? `${mix.length} / ${MAX_MIX} 种` : '';
+    resetBtn.style.display = mix.length ? '' : 'none';
+    mix.forEach(m => mixListEl.appendChild(buildMixRow(m)));
+    updateMixPercent();
+  }
+
+  function renderResults() {
+    pigmentCaption.textContent = `模拟真实颜料的光学吸收（Kubelka–Munk 原理）· ${MEDIA[medium].note}`;
+
+    if (!mix.length) {
+      emptyResults.style.display = 'block';
+      cardsRow.style.display = 'none';
+      insight.style.display = 'none';
+      fallbackNote.style.display = 'none';
+      return;
+    }
+    emptyResults.style.display = 'none';
+    cardsRow.style.display = 'grid';
+
+    const dig = baseDigitalMix(mix);
+    const pig = pigmentDisplay(mix);
+
+    document.getElementById('digitalSwatch').style.background = rgbCss(dig);
+    document.getElementById('pigmentSwatch').style.background = rgbCss(pig);
+    document.getElementById('digitalHex').textContent = rgbToHex(dig);
+    document.getElementById('pigmentHex').textContent = rgbToHex(pig);
+
+    const d = deltaE(dig, pig);
+    let msg;
+    if (d < 3) msg = `两种算法算出来的颜色<strong>几乎一样</strong>——这组颜料凑巧不容易"翻车"。`;
+    else if (d < 10) msg = `已经能看出<strong>轻微差别</strong>了：颜料混合的结果会有一点色相偏移，比数字混色更有层次。`;
+    else msg = `差别相当<strong>明显</strong>：数字取色器算出来的颜色，和真实颜料混出来的完全是两回事。`;
+
+    const mineralCount = mix.filter(m => PALETTE[m.idx].tag === 'mineral').length;
+    let noteLine = '';
+    if (medium === 'guohua' && mineralCount >= 2) {
+      noteLine = `<div class="note-line">提示：传统国画技法里，矿物颜料（如朱红、赭石）较少直接调和，更多靠罩染分层来过渡——这里的模拟结果仅供参考。</div>`;
+    }
+
+    insight.innerHTML = msg + noteLine;
+    insight.style.display = 'block';
+    fallbackNote.style.display = usedFallback ? 'block' : 'none';
+
+    if (mode === 'challenge' && target) {
+      const targetColor = pigmentDisplay(target.list);
+      const score = Math.max(0, Math.min(100, Math.round(100 - deltaE(pig, targetColor) * 1.3)));
+      document.getElementById('targetSwatch').style.background = rgbCss(targetColor);
+      document.getElementById('scoreBar').style.width = score + '%';
+      const label = document.getElementById('scoreLabel');
+      if (score >= 92) label.textContent = `非常接近了，${score} 分！`;
+      else if (score >= 70) label.textContent = `挺接近了，${score} 分，再调调看`;
+      else label.textContent = `还有点距离，${score} 分`;
+    }
+  }
+
+  function render() {
+    renderPalette();
+    renderMixList();
+    renderResults();
+    renderSavedRecipes();
+  }
+
+  // ---------- challenge mode ----------
+  function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+  function newTarget() {
+    const pickable = PALETTE.map((_,i)=>i).filter(i => PALETTE[i].name !== '钛白' && PALETTE[i].name !== '象牙黑');
+    const count = 2 + Math.floor(Math.random()*2);
+    const idxs = shuffle(pickable).slice(0, count);
+    const list = idxs.map(idx => ({ idx, amount: 20 + Math.round(Math.random()*80) }));
+    target = { list };
+    recipeReveal.style.display = 'none';
+    recipeReveal.innerHTML = '';
+    render();
+  }
+
+  function revealRecipe() {
+    if (!target) return;
+    const total = target.list.reduce((s,p)=>s+p.amount,0);
+    recipeReveal.innerHTML = '这次目标色由以下颜料混成：' + target.list.map(p=>{
+      const pig = PALETTE[p.idx];
+      const pct = Math.round(p.amount/total*100);
+      return `<span class="chip"><i style="background:${pig.hex}"></i>${pig.name} ${pct}%</span>`;
+    }).join('');
+    recipeReveal.style.display = 'block';
+  }
+
+  // ---------- mode / media switching ----------
+  document.getElementById('modeToggle').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-mode]');
+    if (!btn) return;
+    mode = btn.dataset.mode;
+    document.querySelectorAll('#modeToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+    targetSection.style.display = mode === 'challenge' ? 'block' : 'none';
+    if (mode === 'challenge' && !target) newTarget();
+    render();
+  });
+  document.getElementById('mediaToggle').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-media]');
+    if (!btn) return;
+    medium = btn.dataset.media;
+    document.querySelectorAll('#mediaToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+    render();
+  });
+  document.getElementById('newTargetBtn').addEventListener('click', newTarget);
+  document.getElementById('revealBtn').addEventListener('click', revealRecipe);
+  document.getElementById('resetBtn').addEventListener('click', ()=>{ mix=[]; render(); });
+
+  // ---------- saved recipes ----------
+  const STORAGE_KEY = 'mixstudio:recipes';
+  function loadRecipes() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      savedRecipes = raw ? JSON.parse(raw) : [];
+    } catch (e) { savedRecipes = []; }
+  }
+  function persistRecipes() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(savedRecipes)); } catch (e) {}
+  }
+
+  function buildRecipeData(name) {
+    const total = mix.reduce((s,m)=>s+m.amount,0);
+    const pigments = mix.map(m=>{
+      const p = PALETTE[m.idx];
+      return { name: p.name, hex: p.hex, pct: Math.round(m.amount/total*100) };
+    });
+    const dig = baseDigitalMix(mix);
+    const pig = pigmentDisplay(mix);
+    return {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      name: name && name.trim() ? name.trim() : '未命名配方',
+      medium, mediumName: MEDIA[medium].name,
+      pigments,
+      digitalHex: rgbToHex(dig),
+      pigmentHex: rgbToHex(pig),
+      time: Date.now(),
+    };
+  }
+
+  document.getElementById('saveRecipeBtn').addEventListener('click', ()=>{
+    if (!mix.length) { saveStatus.textContent = '先加入至少一种颜料吧。'; return; }
+    const nameInput = document.getElementById('recipeNameInput');
+    const data = buildRecipeData(nameInput.value);
+    savedRecipes.unshift(data);
+    persistRecipes();
+    nameInput.value = '';
+    saveStatus.textContent = `已保存「${data.name}」`;
+    renderSavedRecipes();
+    setTimeout(()=>{ if (saveStatus.textContent.indexOf(data.name) >= 0) saveStatus.textContent = ''; }, 2500);
+  });
+
+  function renderSavedRecipes() {
+    const grid = document.getElementById('recipesGrid');
+    const empty = document.getElementById('recipesEmpty');
+    grid.innerHTML = '';
+    empty.style.display = savedRecipes.length ? 'none' : 'block';
+    savedRecipes.forEach(r => {
+      const card = document.createElement('div');
+      card.className = 'recipe-card';
+      const chips = r.pigments.map(p=>`<span class="chip"><i style="background:${p.hex}"></i>${p.name} ${p.pct}%</span>`).join('');
+      card.innerHTML = `
+        <div class="swatches"><div style="background:${r.digitalHex}"></div><div style="background:${r.pigmentHex}"></div></div>
+        <div class="name">${r.name}</div>
+        <div class="meta-line">${r.mediumName} · ${new Date(r.time).toLocaleDateString('zh-CN')}</div>
+        <div class="recipe-mini">${chips}</div>
+        <div class="actions">
+          <button data-act="load">读取</button>
+          <button data-act="export">导出图片</button>
+          <button data-act="delete" class="danger">删除</button>
+        </div>
+      `;
+      card.querySelector('[data-act="load"]').addEventListener('click', ()=>{
+        mix = r.pigments.map(p => ({ idx: PALETTE.findIndex(pl=>pl.name===p.name && pl.hex===p.hex), amount: p.pct || 50 })).filter(m=>m.idx>=0);
+        medium = r.medium;
+        document.querySelectorAll('#mediaToggle button').forEach(b=>b.classList.toggle('active', b.dataset.media===medium));
+        render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+      card.querySelector('[data-act="delete"]').addEventListener('click', ()=>{
+        savedRecipes = savedRecipes.filter(x=>x.id!==r.id);
+        persistRecipes();
+        renderSavedRecipes();
+      });
+      card.querySelector('[data-act="export"]').addEventListener('click', (e)=> exportRecipeImage(r, e.target));
+      grid.appendChild(card);
+    });
+  }
+
+  // ---------- image export ----------
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  async function renderRecipeCanvas(r) {
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e){} }
+    const scale = 2;
+    const W = 640, H = 200 + r.pigments.length * 28 + 40;
+    const canvas = document.createElement('canvas');
+    canvas.width = W*scale; canvas.height = H*scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = '#F2EFE3';
+    roundRect(ctx,0,0,W,H,0); ctx.fill();
+
+    ctx.fillStyle = '#2A241E';
+    ctx.font = '600 28px Fraunces, Georgia, serif';
+    ctx.fillText(r.name, 32, 52);
+
+    ctx.font = '500 13px Inter, sans-serif';
+    ctx.fillStyle = '#6B6152';
+    ctx.fillText(`${r.mediumName} · ${new Date(r.time).toLocaleDateString('zh-CN')}`, 32, 74);
+
+    const swW = (W - 64 - 16) / 2, swH = 130, swY = 96;
+    ctx.fillStyle = r.digitalHex; roundRect(ctx,32,swY,swW,swH,12); ctx.fill();
+    ctx.fillStyle = r.pigmentHex; roundRect(ctx,32+swW+16,swY,swW,swH,12); ctx.fill();
+
+    ctx.font = '600 12px Inter, sans-serif'; ctx.fillStyle = '#2A241E';
+    ctx.fillText('数字混色  ' + r.digitalHex, 32, swY+swH+20);
+    ctx.fillText('颜料混色  ' + r.pigmentHex, 32+swW+16, swY+swH+20);
+
+    let y = swY + swH + 52;
+    ctx.font = '600 13px Inter, sans-serif'; ctx.fillStyle = '#2A241E';
+    ctx.fillText('配方', 32, y); y += 24;
+    ctx.font = '400 13px Inter, sans-serif';
+    r.pigments.forEach(p => {
+      ctx.fillStyle = p.hex;
+      roundRect(ctx,32,y-12,14,14,4); ctx.fill();
+      ctx.fillStyle = '#2A241E';
+      ctx.fillText(`${p.name}   ${p.pct}%`, 54, y);
+      y += 26;
+    });
+
+    ctx.font = '400 11px Inter, sans-serif'; ctx.fillStyle = '#A79A87';
+    ctx.fillText('调色台 · mixstudio', 32, H-16);
+
+    return canvas;
+  }
+
+  function showImageFallback(canvas, filename) {
+    const dataUrl = canvas.toDataURL('image/png');
+    const overlay = document.createElement('div');
+    overlay.className = 'img-modal';
+    overlay.innerHTML = `
+      <div class="sheet">
+        <img src="${dataUrl}" alt="${filename}">
+        <div class="hint">自动下载没有成功，长按（手机）或右键（电脑）图片，选择"存储图片 / 图片另存为"就能保存了。</div>
+        <button class="close-btn">关闭</button>
+      </div>
+    `;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('.close-btn').addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+  }
+
+  async function exportRecipeImage(r, triggerEl) {
+    const card = triggerEl.closest('.recipe-card');
+    const status = document.createElement('div');
+    status.style.cssText = 'font-size:11px;color:var(--text-muted);margin-top:6px;';
+    card.appendChild(status);
+    status.textContent = '正在生成图片…';
+    const filename = (r.name.replace(/[\\\/:*?"<>|]/g,'') || 'recipe') + '.png';
+    let canvas;
+    try {
+      canvas = await renderRecipeCanvas(r);
+    } catch (e) {
+      status.textContent = '生成图片失败，可以再试一次';
+      setTimeout(()=> status.remove(), 2500);
+      return;
+    }
+
+    let saved = false;
+    try {
+      if (window.claude && typeof window.claude.use === 'function') {
+        const downloads = await window.claude.use('downloads');
+        if (downloads) {
+          const blob = await new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png'));
+          await downloads.save({ filename, data: blob });
+          saved = true;
+        }
+      }
+    } catch (e) {
+      saved = false;
+    }
+
+    if (saved) {
+      status.textContent = '已导出';
+      setTimeout(()=> status.remove(), 2000);
+    } else {
+      status.remove();
+      showImageFallback(canvas, filename);
+    }
+  }
+
+  // ---------- init ----------
+  function boot() { loadRecipes(); render(); }
+  let started = false;
+  window.addEventListener('mixbox:settled', ()=>{ if(!started){ started=true; boot(); } });
+  setTimeout(()=>{ if(!started){ started=true; boot(); } }, 2200);
+})();
+</script>
+
+</body>
+</html>

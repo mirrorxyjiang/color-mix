@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>调色台 · 数字混色 vs 真实颜料</title>
+<meta name="description" content="给画画的人用的调色练习工具：同一个颜料配方，左边是软件 RGB 算法的结果，右边是真实颜料的光学混合结果。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    --bg: #DAD7C7;
+    --surface: #F2EFE3;
+    --surface-2: #E7E2D2;
+    --text: #2A241E;
+    --text-muted: #6B6152;
+    --accent: #8A4632;
+    --accent-soft: #E3C9BB;
+    --border: #C7C0A9;
+    --shadow: rgba(42, 36, 30, 0.14);
+
+    --font-display: "Fraunces", Georgia, "Songti SC", serif;
+    --font-ui: "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #201B16; --surface: #2B241D; --surface-2: #352C23;
+      --text: #EDE6D9; --text-muted: #A79A87; --accent: #D08A66;
+      --accent-soft: #4A362C; --border: #473C31; --shadow: rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #201B16; --surface: #2B241D; --surface-2: #352C23;
+    --text: #EDE6D9; --text-muted: #A79A87; --accent: #D08A66;
+    --accent-soft: #4A362C; --border: #473C31; --shadow: rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font-family: var(--font-ui); -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 24px;
+    padding-top: calc(40px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .card {
+    width: 100%; max-width: 620px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 36px 40px 32px;
+    box-shadow: 0 10px 30px var(--shadow);
+  }
+
+  .eyebrow { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px; }
+  h1 {
+    font-family: var(--font-display); font-weight: 600; font-size: clamp(30px, 6vw, 42px);
+    line-height: 1.15; letter-spacing: -0.01em; margin: 0 0 14px;
+  }
+  .lede { font-size: 15.5px; line-height: 1.7; color: var(--text-muted); margin: 0 0 24px; }
+
+  .demo { display: flex; gap: 10px; margin-bottom: 26px; }
+  .demo figure { flex: 1; margin: 0; }
+  .demo .swatch { height: 92px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .demo figcaption { font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
+  .demo figcaption b { color: var(--text); font-weight: 600; }
+
+  .cta {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    text-decoration: none; background: var(--accent); color: #fff;
+    font-size: 15px; font-weight: 600; padding: 15px 20px; border-radius: 12px;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .cta:hover { transform: translateY(-1px); filter: brightness(1.06); }
+  .cta .arrow { font-size: 17px; line-height: 1; }
+
+  .features { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 10px; }
+  .features li { font-size: 13.5px; line-height: 1.6; color: var(--text-muted); padding-left: 18px; position: relative; }
+  .features li::before {
+    content: ''; position: absolute; left: 2px; top: 8px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .features li b { color: var(--text); font-weight: 600; }
+
+  footer {
+    margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted); line-height: 1.6;
+  }
+  footer a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+
+  @media (max-width: 520px) {
+    .card { padding: 26px 22px 24px; }
+    .demo { flex-direction: column; }
+    .demo figure { display: flex; align-items: center; gap: 12px; }
+    .demo .swatch { width: 72px; height: 56px; flex-shrink: 0; }
+    .demo figcaption { margin-top: 0; }
+  }
+</style>
+</head>
+<body>
+
+<main class="card">
+  <div class="eyebrow">Mix Studio</div>
+  <h1>调色台</h1>
+  <p class="lede">
+    同一个颜料配方，屏幕和你调出来的是两回事。<br>
+    这里把两种算法摆在一起：左边的色卡按软件默认的 RGB 平均值算，右边的色卡模拟真实颜料在画布上的光学混合。亲手调一次，差异一眼就能看出来。
+  </p>
+
+  <div class="demo">
+    <figure>
+      <div class="swatch" style="background:#806A55"></div>
+      <figcaption><b>数字混色</b><br>RGB 线性平均，取色器的做法</figcaption>
+    </figure>
+    <figure>
+      <div class="swatch" style="background:#864F20"></div>
+      <figcaption><b>颜料混色</b><br>Kubelka–Munk 光学吸收模型</figcaption>
+    </figure>
+  </div>
+
+  <a class="cta" href="mix-studio.html">打开调色台<span class="arrow">→</span></a>
+
+  <ul class="features">
+    <li><b>21 种颜料</b>：涵盖西画与国画常用色，最多同时调配 6 种</li>
+    <li><b>4 种画种</b>：水彩、国画、丙烯、油画——区分透明度与干湿变化</li>
+    <li><b>挑战模式</b>：给定目标色去调判分，卡住时可以揭晓配方</li>
+    <li><b>配方本</b>：调好的颜色起名保存，随时读回或导出成图片</li>
+  </ul>
+
+  <footer>
+    单文件网页，无需安装。混色由 <a href="https://github.com/scrtwpns/mixbox" target="_blank" rel="noopener">Mixbox</a> 提供计算。<br>
+    用浏览器直接打开 <code>mix-studio.html</code> 也能用。
+  </footer>
+</main>
+
+</body>
+</html>
