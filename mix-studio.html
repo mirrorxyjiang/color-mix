@@ -186,11 +186,12 @@
   }
   .img-modal img { width: 100%; border-radius: 10px; display: block; box-shadow: 0 6px 20px var(--shadow); }
   .img-modal .hint { font-size: 13px; color: var(--text-muted); margin: 12px 0 4px; line-height: 1.6; }
-  .img-modal .close-btn {
-    margin-top: 12px; width: 100%; font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+  .img-modal .close-btn, .img-modal .save-link {
+    margin-top: 10px; width: 100%; font-family: var(--font-ui); font-size: 13px; font-weight: 600;
     padding: 10px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border);
     background: var(--surface-2); color: var(--text);
   }
+  .img-modal .save-link { background: var(--accent); border-color: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -848,18 +849,62 @@
 
   function showImageFallback(canvas, filename) {
     const dataUrl = canvas.toDataURL('image/png');
+    const safeName = String(filename).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
     const overlay = document.createElement('div');
     overlay.className = 'img-modal';
     overlay.innerHTML = `
       <div class="sheet">
-        <img src="${dataUrl}" alt="${filename}">
-        <div class="hint">自动下载没有成功，长按（手机）或右键（电脑）图片，选择"存储图片 / 图片另存为"就能保存了。</div>
+        <img src="${dataUrl}" alt="${safeName}">
+        <div class="hint">自动下载被浏览器拦掉了。点下面的按钮再试一次；也可以长按（手机）或右键（电脑）图片，选择"存储图片 / 图片另存为"。</div>
+        <button class="save-link">下载图片</button>
         <button class="close-btn">关闭</button>
       </div>
     `;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     overlay.querySelector('.close-btn').addEventListener('click', () => overlay.remove());
+    const dl = overlay.querySelector('.save-link');
+    if (dl) dl.addEventListener('click', () => {
+      canvasBlob(canvas).then(blob => {
+        if (blob) nativeDownload(blob, filename);
+      });
+    });
     document.body.appendChild(overlay);
+  }
+
+  // canvas → PNG blob，老浏览器没有 toBlob 时用 dataURL 兜底
+  function canvasBlob(canvas) {
+    if (typeof canvas.toBlob === 'function') {
+      return new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png'));
+    }
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const bin = atob(dataUrl.split(',')[1]);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return Promise.resolve(new Blob([arr], { type: 'image/png' }));
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  function canNativeDownload() {
+    try {
+      return typeof URL !== 'undefined'
+        && typeof URL.createObjectURL === 'function'
+        && 'download' in document.createElement('a');
+    } catch (e) { return false; }
+  }
+
+  function nativeDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
   }
 
   async function exportRecipeImage(r, triggerEl) {
@@ -869,6 +914,7 @@
     card.appendChild(status);
     status.textContent = '正在生成图片…';
     const filename = (r.name.replace(/[\\\/:*?"<>|]/g,'') || 'recipe') + '.png';
+
     let canvas;
     try {
       canvas = await renderRecipeCanvas(r);
@@ -878,27 +924,43 @@
       return;
     }
 
-    let saved = false;
+    // 1) 宿主环境（如 Claude artifacts）提供的下载通道，能用就用
     try {
       if (window.claude && typeof window.claude.use === 'function') {
         const downloads = await window.claude.use('downloads');
         if (downloads) {
-          const blob = await new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png'));
+          const blob = await canvasBlob(canvas);
           await downloads.save({ filename, data: blob });
-          saved = true;
+          status.textContent = '已导出';
+          setTimeout(()=> status.remove(), 2000);
+          return;
         }
       }
-    } catch (e) {
-      saved = false;
+    } catch (e) { /* 用不了就继续走浏览器原生下载 */ }
+
+    // 2) 浏览器原生下载：创建 blob 链接并触发 <a download>
+    if (canNativeDownload()) {
+      try {
+        const blob = await canvasBlob(canvas);
+        if (!blob) throw new Error('blob failed');
+        nativeDownload(blob, filename);
+        status.textContent = '已导出 ' + filename;
+        // 某些内嵌预览环境会拦掉下载，页面无从感知，给用户留一条备用路径
+        const alt = document.createElement('button');
+        alt.type = 'button';
+        alt.textContent = '没收到文件？点这里预览保存';
+        alt.style.cssText = 'display:block;margin-top:5px;border:none;background:none;padding:0;'
+          + 'font-family:inherit;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;';
+        alt.addEventListener('click', () => showImageFallback(canvas, filename));
+        status.appendChild(alt);
+        setTimeout(()=> { if (status.parentNode) status.remove(); }, 15000);
+        return;
+      } catch (e) { /* 落到下面的弹窗 */ }
     }
 
-    if (saved) {
-      status.textContent = '已导出';
-      setTimeout(()=> status.remove(), 2000);
-    } else {
-      status.remove();
-      showImageFallback(canvas, filename);
-    }
+    // 3) 兜底：直接展示图片，长按 / 右键保存
+    if (status.parentNode) status.remove();
+    showImageFallback(canvas, filename);
   }
 
   // ---------- init ----------
