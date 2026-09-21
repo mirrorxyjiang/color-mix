@@ -804,7 +804,11 @@
   async function renderRecipeCanvas(r) {
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e){} }
     const scale = 2;
-    const W = 640, H = 200 + r.pigments.length * 28 + 40;
+    const W = 640;
+    // 布局从上到下：标题52 / 画种74 / 色块96~226 / 标签246 / 配方标题278 / 行302起 / 底部水印
+    const rowH = 30;
+    const firstRowY = 302;
+    const H = firstRowY + (r.pigments.length - 1) * rowH + 62;  // 最后一行 + 与水印的间距
     const canvas = document.createElement('canvas');
     canvas.width = W*scale; canvas.height = H*scale;
     const ctx = canvas.getContext('2d');
@@ -836,9 +840,12 @@
     r.pigments.forEach(p => {
       ctx.fillStyle = p.hex;
       roundRect(ctx,32,y-12,14,14,4); ctx.fill();
+      // 钛白这类浅色在米色背景上看不出边界，统一描一圈淡边
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
+      roundRect(ctx,32.5,y-11.5,13,13,3.5); ctx.stroke();
       ctx.fillStyle = '#2A241E';
       ctx.fillText(`${p.name}   ${p.pct}%`, 54, y);
-      y += 26;
+      y += rowH;
     });
 
     ctx.font = '400 11px Inter, sans-serif'; ctx.fillStyle = '#A79A87';
