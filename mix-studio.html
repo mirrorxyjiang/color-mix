@@ -644,23 +644,36 @@
     insight.innerHTML = msg + noteLine;
     insight.style.display = 'block';
     fallbackNote.style.display = usedFallback ? 'block' : 'none';
+  }
 
-    if (mode === 'challenge' && target) {
-      const targetColor = pigmentDisplay(target.list);
-      const score = Math.max(0, Math.min(100, Math.round(100 - deltaE(pig, targetColor) * 1.3)));
-      document.getElementById('targetSwatch').style.background = rgbCss(targetColor);
-      document.getElementById('scoreBar').style.width = score + '%';
-      const label = document.getElementById('scoreLabel');
-      if (score >= 92) label.textContent = `非常接近了，${score} 分！`;
-      else if (score >= 70) label.textContent = `挺接近了，${score} 分，再调调看`;
-      else label.textContent = `还有点距离，${score} 分`;
+  // 目标色单独渲染：调色盘为空时也要能跟着「换一个」刷新，不能跟着上面一起提前 return
+  function renderTarget() {
+    if (mode !== 'challenge' || !target) return;
+    const swatch = document.getElementById('targetSwatch');
+    const bar = document.getElementById('scoreBar');
+    const label = document.getElementById('scoreLabel');
+    const targetColor = pigmentDisplay(target.list);
+    if (targetColor) swatch.style.background = rgbCss(targetColor);
+
+    if (!mix.length) {
+      bar.style.width = '0%';
+      label.textContent = '先在上面的调色盘里加颜料，再把它调成这个目标色';
+      return;
     }
+
+    const pig = pigmentDisplay(mix);
+    const score = Math.max(0, Math.min(100, Math.round(100 - deltaE(pig, targetColor) * 1.3)));
+    bar.style.width = score + '%';
+    if (score >= 92) label.textContent = `非常接近了，${score} 分！`;
+    else if (score >= 70) label.textContent = `挺接近了，${score} 分，再调调看`;
+    else label.textContent = `还有点距离，${score} 分`;
   }
 
   function render() {
     renderPalette();
     renderMixList();
     renderResults();
+    renderTarget();
     renderSavedRecipes();
   }
 
