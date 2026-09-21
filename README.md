@@ -7,7 +7,7 @@
 
 ## 在线试用
 
-开启 GitHub Pages 后访问（把用户名和仓库名换成你自己的）：
+开启 GitHub Pages 后访问：
 
 ```
 https://github.com/mirrorxyjiang/color-mix
