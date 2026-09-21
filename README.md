@@ -10,7 +10,7 @@
 开启 GitHub Pages 后访问（把用户名和仓库名换成你自己的）：
 
 ```
-https://<用户名>.github.io/<仓库名>/
+https://github.com/mirrorxyjiang/color-mix
 ```
 
 仓库根目录的 `index.html` 是入口页；也可以直接打开同目录下的 `mix-studio.html` 使用。
@@ -20,8 +20,8 @@ https://<用户名>.github.io/<仓库名>/
 不需要安装任何东西，也没有构建步骤：
 
 ```bash
-git clone https://github.com/<用户名>/<仓库名>.git
-cd <仓库名>
+git clone https://github.com/mirrorxyjiang/color-mix.git
+cd color-mix 
 ```
 
 然后双击 `index.html`（或 `mix-studio.html`）用浏览器打开即可。
