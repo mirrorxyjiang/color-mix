@@ -158,6 +158,34 @@
 
   .empty-results { border: 1px dashed var(--border); border-radius: 16px; padding: 48px 20px; text-align: center; color: var(--text-muted); font-size: 14px; }
 
+  .advice-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; }
+  .advice-panel h2 { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--text-muted); margin: 0 0 12px; }
+  .advice-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .advice-buttons button {
+    font-family: var(--font-ui); font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 7px 14px;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    transition: background .15s ease, color .15s ease;
+  }
+  .advice-buttons button:hover { background: var(--accent-soft); }
+  .advice-output { margin-top: 12px; font-size: 13px; line-height: 1.6; color: var(--text); display: none; }
+  .advice-output .advice-text { margin-bottom: 8px; }
+  .advice-try {
+    display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-ui); font-size: 12.5px; font-weight: 600;
+    border-radius: 999px; padding: 6px 13px 6px 8px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  .advice-try i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4); }
+  .advice-try:disabled { opacity: .5; cursor: not-allowed; }
+
+  .tips-panel details summary {
+    font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; list-style: none;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tips-panel details summary::-webkit-details-marker { display: none; }
+  .tips-panel details summary::before { content: '▸'; color: var(--text-muted); font-size: 11px; transition: transform .15s ease; }
+  .tips-panel details[open] summary::before { transform: rotate(90deg); }
+  .tips-list { margin: 12px 0 2px; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--text-muted); }
+  .tips-list li { margin-bottom: 6px; }
+
   .recipes-panel { margin-top: 28px; }
   .recipes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .recipe-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
@@ -296,8 +324,35 @@
       <div class="insight" id="insight" style="display:none;"></div>
       <div class="fallback-note" id="fallbackNote" style="display:none;">（真实颜料引擎未能加载，当前使用近似算法，趋势正确但精度略低）</div>
 
+      <div class="advice-panel">
+        <h2>调色建议 · 想往哪个方向调？</h2>
+        <div class="advice-buttons" id="adviceButtons">
+          <button data-advice="brighter">更亮</button>
+          <button data-advice="darker">更暗</button>
+          <button data-advice="vivid">更鲜艳</button>
+          <button data-advice="muted">更柔和</button>
+          <button data-advice="warmer">偏暖</button>
+          <button data-advice="cooler">偏冷</button>
+        </div>
+        <div class="advice-output" id="adviceOutput"></div>
+      </div>
+
     </section>
   </main>
+
+  <section class="panel tips-panel">
+    <details>
+      <summary>调色小贴士</summary>
+      <ul class="tips-list">
+        <li>想要提亮，优先用同色系里更亮的颜料，而不是直接加白——加白容易把颜色带向粉调。</li>
+        <li>想要压暗，优先用同色系更深的颜料，而不是直接加黑——加黑容易让颜色发闷。</li>
+        <li>两种接近互补色的颜料大比例混合会变成灰褐色，这有时是刻意用来降低饱和度的手法，但不总是你想要的效果。</li>
+        <li>颜料种类越多，颜色通常越浑浊。好看的灰色或复色，往往只需要 2-3 种颜料。</li>
+        <li>水彩、国画的水色靠加水变浅；油画、丙烯（以及国画的矿物颜料）靠加白变浅——用错方法，画面质感会不对。</li>
+        <li>邻近色（色相环上相邻的颜色）混合过渡自然；互补色混合容易浑浊或形成强对比，按需要选择。</li>
+      </ul>
+    </details>
+  </section>
 
   <section class="panel recipes-panel">
     <h2>我的配方</h2>
@@ -401,6 +456,34 @@
     const l1=rgbToLab(c1), l2=rgbToLab(c2);
     return Math.sqrt((l1.L-l2.L)**2 + (l1.a-l2.a)**2 + (l1.b-l2.b)**2);
   }
+  function rgbToHsl(c) {
+    const r=c.r/255, g=c.g/255, b=c.b/255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    let h=0, s=0; const l=(max+min)/2;
+    if (max !== min) {
+      const d = max-min;
+      s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+      switch (max) {
+        case r: h = (g-b)/d + (g<b?6:0); break;
+        case g: h = (b-r)/d + 2; break;
+        case b: h = (r-g)/d + 4; break;
+      }
+      h *= 60;
+    }
+    return { h, s: s*100, l: l*100 };
+  }
+  function hueDist(a, b) { const d = Math.abs(a-b) % 360; return d > 180 ? 360-d : d; }
+
+  // 绝对彩度：(max-min)/255。判断"是不是黑白灰"必须用这个，不能用 HSL 的 s——
+  // HSL 饱和度是相对差，越靠近黑或白分母越小、数值越虚高：
+  // 象牙黑 #1C1913 的 s 有 19%，钛白 #FDFDFB 更是 32%，足以骗过任何 s 阈值；
+  // 换成绝对彩度后分别是 3.5% 和 0.8%，而真正有色的颜料最低也在 20% 以上，一眼就能分开。
+  function rgbChroma(c) {
+    const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b);
+    return (max - min) / 255 * 100;
+  }
+  // 低于这个值就认为"没有明确色相"，不能参与同色系/冷暖的匹配
+  const MIN_CHROMA = 12;
 
   // ---------- mixing engines ----------
   function baseDigitalMix(list) {
@@ -635,16 +718,214 @@
     else if (d < 10) msg = `已经能看出<strong>轻微差别</strong>了：颜料混合的结果会有一点色相偏移，比数字混色更有层次。`;
     else msg = `差别相当<strong>明显</strong>：数字取色器算出来的颜色，和真实颜料混出来的完全是两回事。`;
 
-    const mineralCount = mix.filter(m => PALETTE[m.idx].tag === 'mineral').length;
-    let noteLine = '';
-    if (medium === 'guohua' && mineralCount >= 2) {
-      noteLine = `<div class="note-line">提示：传统国画技法里，矿物颜料（如朱红、赭石）较少直接调和，更多靠罩染分层来过渡——这里的模拟结果仅供参考。</div>`;
-    }
+    const tips = generateAutoTips(mix);
+    const tipsHtml = tips.map(t => `<div class="note-line">${t}</div>`).join('');
 
-    insight.innerHTML = msg + noteLine;
+    insight.innerHTML = msg + tipsHtml;
     insight.style.display = 'block';
     fallbackNote.style.display = usedFallback ? 'block' : 'none';
   }
+
+  // 自动观察当前调色盘状态，主动给出的小提示（最多显示两条，按下面的顺序取前两条命中的）
+  function generateAutoTips(list) {
+    const tips = [];
+    const total = list.reduce((s,m)=>s+m.amount,0) || 1;
+
+    for (let i=0;i<list.length;i++){
+      for (let j=i+1;j<list.length;j++){
+        const a = list[i], b = list[j];
+        const rgbA = hexToRgb(PALETTE[a.idx].hex), rgbB = hexToRgb(PALETTE[b.idx].hex);
+        // 同样是色相噪声问题：钛白、象牙黑这类低彩度颜料的色相不可信，不参与互补色判断
+        if (rgbChroma(rgbA) < MIN_CHROMA || rgbChroma(rgbB) < MIN_CHROMA) continue;
+        const ha = rgbToHsl(rgbA).h;
+        const hb = rgbToHsl(rgbB).h;
+        if (hueDist(ha,hb) > 150 && a.amount/total >= 0.2 && b.amount/total >= 0.2) {
+          tips.push(`「${PALETTE[a.idx].name}」和「${PALETTE[b.idx].name}」接近互补色，两者比例都不小——继续加深会偏向灰褐色，除非这就是你想要的效果。`);
+        }
+      }
+    }
+
+    const white = list.find(m => PALETTE[m.idx].name === '钛白');
+    if (white && white.amount/total >= 0.3) {
+      tips.push(MEDIA[medium].transparent
+        ? '钛白占比不小。水彩、国画的水色通常靠加水稀释来变浅，直接加大量白反而容易发粉、失去颜色本身的味道。'
+        : '加了不少钛白，饱和度会明显下降——如果只是想提亮，可以先试试下面"调色建议"里的「更亮」。');
+    }
+
+    const black = list.find(m => PALETTE[m.idx].name === '象牙黑');
+    if (black && black.amount/total >= 0.15) {
+      tips.push('黑色压暗容易让颜色发闷、失去彩度，试试下面"调色建议"里的「更暗」，用同色系深色代替。');
+    }
+
+    if (list.length > 4) {
+      tips.push('颜料种类超过 4 种了，继续加只会让颜色更浊，试着减到 2-3 种看看能不能达到类似效果。');
+    }
+
+    const mineralCount = list.filter(m => PALETTE[m.idx].tag === 'mineral').length;
+    if (medium === 'guohua' && mineralCount >= 2) {
+      tips.push('传统国画技法里，矿物颜料（如朱红、赭石）较少直接调和，更多靠罩染分层来过渡——这里的模拟结果仅供参考。');
+    }
+
+    return tips.slice(0, 2);
+  }
+
+  // ---------- 调色建议（方向性） ----------
+  function currentMixHsl() {
+    const raw = basePigmentMix(mix);
+    if (!raw) return null;
+    return rgbToHsl(raw);
+  }
+  // 当前混合色的彩度：太低说明颜色已经接近黑白灰，色相是噪声，不能再谈"同色系"或冷暖
+  function currentMixChroma() {
+    const raw = basePigmentMix(mix);
+    return raw ? rgbChroma(raw) : 0;
+  }
+
+  function findNearestByHue(targetHue, opts = {}) {
+    const exclude = opts.exclude || [];
+    const minC = opts.minC != null ? opts.minC : MIN_CHROMA;
+    let best = null, bestScore = Infinity;
+    PALETTE.forEach((p, idx) => {
+      if (exclude.includes(idx)) return;
+      const rgb = hexToRgb(p.hex);
+      const hsl = rgbToHsl(rgb);
+      const chroma = rgbChroma(rgb);
+      if (opts.minL != null && hsl.l < opts.minL) return;
+      if (opts.maxL != null && hsl.l > opts.maxL) return;
+      // 彩度太低的颜料（钛白、象牙黑这类）色相是噪声，不能冒充"同色系"候选
+      if (chroma < minC) return;
+      let score = hueDist(hsl.h, targetHue);
+      if (opts.preferHigherC) score -= chroma * 0.08;
+      if (score < bestScore) { bestScore = score; best = { idx, hsl, chroma }; }
+    });
+    return best;
+  }
+
+  const ADVICE = {
+    brighter: () => {
+      const hsl = currentMixHsl();
+      if (!hsl) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
+      if (currentMixChroma() < MIN_CHROMA) {
+        return { text: '现在的颜色已经接近黑白灰，谈不上"同色系里更亮的"了，再提亮只会更灰白。想找回色彩感，先试试「更鲜艳」。' };
+      }
+      const exclude = mix.map(m=>m.idx);
+      const cand = findNearestByHue(hsl.h, { exclude, minL: hsl.l + 8 });
+      if (cand && hueDist(cand.hsl.h, hsl.h) < 50) {
+        return { text: `试试加一点「${PALETTE[cand.idx].name}」，同色相里选更亮的颜料提亮，比直接加白更不容易发灰发粉。`, candidate: cand.idx };
+      }
+      const white = PALETTE.findIndex(p=>p.name==='钛白');
+      if (exclude.includes(white)) {
+        return { text: '调色盘里已经有钛白了。颜料架中没有更合适的同色系亮色，只能把钛白的比例再往上加——注意颜色会明显往粉调、灰调偏。' };
+      }
+      return { text: '颜料架里没有更合适的同色系亮色了，这种情况直接加一点钛白也可以，只是注意色相会往粉调偏。', candidate: white };
+    },
+    darker: () => {
+      const hsl = currentMixHsl();
+      if (!hsl) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
+      if (currentMixChroma() < MIN_CHROMA) {
+        return { text: '现在的颜色已经接近黑白灰，没有"同色系更深"可言，再压暗只会更闷。想找回色彩感，先试试「更鲜艳」。' };
+      }
+      const exclude = mix.map(m=>m.idx);
+      const cand = findNearestByHue(hsl.h, { exclude, maxL: hsl.l - 8 });
+      if (cand && hueDist(cand.hsl.h, hsl.h) < 50) {
+        return { text: `试试加一点「${PALETTE[cand.idx].name}」，同色系压暗能保留颜色本身的味道，比直接加黑更不容易发闷。`, candidate: cand.idx };
+      }
+      const black = PALETTE.findIndex(p=>p.name==='象牙黑');
+      if (exclude.includes(black)) {
+        return { text: '调色盘里已经有象牙黑了。颜料架中没有更合适的同色系深色，只能继续加黑——但颜色会越来越闷、彩度继续掉，建议先试试「更鲜艳」。' };
+      }
+      return { text: '颜料架里没有更合适的同色系深色了，可以少量试试象牙黑，但注意颜色会变闷。', candidate: black };
+    },
+    vivid: () => {
+      const hasWhite = mix.some(m => PALETTE[m.idx].name === '钛白');
+      const hasBlack = mix.some(m => PALETTE[m.idx].name === '象牙黑');
+      if (hasWhite || hasBlack) {
+        const names = [hasWhite?'钛白':null, hasBlack?'象牙黑':null].filter(Boolean).join('、');
+        return { text: `${names}都会拉低鲜艳度，试着减少它${hasWhite&&hasBlack?'们':''}的比例，或者干脆先移除看看。` };
+      }
+      if (mix.length >= 4) {
+        return { text: '颜料种类已经不少了，种类越多颜色通常越浊，试着先减到 2-3 种主色，鲜艳度会明显回来。' };
+      }
+      if (mix.length < 2) {
+        return { text: '目前颜色本身已经很纯了，这个方向暂时用不上。' };
+      }
+      let worst=null, worstS=Infinity;
+      mix.forEach(m=>{
+        const hsl = rgbToHsl(hexToRgb(PALETTE[m.idx].hex));
+        if (hsl.s < worstS) { worstS = hsl.s; worst = m; }
+      });
+      if (worst) {
+        const worstHsl = rgbToHsl(hexToRgb(PALETTE[worst.idx].hex));
+        const cand = findNearestByHue(worstHsl.h, { exclude: mix.map(m=>m.idx), preferHigherC: true });
+        if (cand) {
+          return { text: `「${PALETTE[worst.idx].name}」本身饱和度不高，是它把整体拉灰了。可以把它换成「${PALETTE[cand.idx].name}」，色相相近但更纯——先加入试试对比。`, candidate: cand.idx };
+        }
+      }
+      return { text: '这个组合已经比较鲜艳了。' };
+    },
+    muted: () => {
+      const hsl = currentMixHsl();
+      if (!hsl) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
+      const targetHue = (hsl.h + 180) % 360;
+      const cand = findNearestByHue(targetHue, { exclude: mix.map(m=>m.idx) });
+      if (cand) {
+        return { text: `加一点点「${PALETTE[cand.idx].name}」（它偏向现在这个颜色的补色方向），少量就能让颜色变柔和、更接近大地色，比直接加黑灰更自然——但加多了会变成灰褐色，注意用量。`, candidate: cand.idx };
+      }
+      const black = PALETTE.findIndex(p=>p.name==='象牙黑');
+      if (mix.some(m=>m.idx===black)) {
+        return { text: '颜料架里暂时没有合适的补色候选了。调色盘里已经有象牙黑，可以再少量加一点，但用量要克制，多了会发闷。' };
+      }
+      return { text: '也可以直接加一点点象牙黑，但用量要克制。', candidate: black };
+    },
+    warmer: () => {
+      const hsl = currentMixHsl();
+      if (!hsl) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
+      if (currentMixChroma() < MIN_CHROMA) {
+        return { text: '现在的颜色接近中性灰，冷暖差别不明显。先用「更鲜艳」找回一点色彩倾向，再谈冷暖更靠谱。' };
+      }
+      if (hueDist(hsl.h, 30) < 35) return { text: '现在已经是暖色调了，不太需要再往暖调整。' };
+      const cand = findNearestByHue(30, { exclude: mix.map(m=>m.idx), preferHigherC: true });
+      if (cand) return { text: `加一点「${PALETTE[cand.idx].name}」能把整体往暖调拉一点。`, candidate: cand.idx };
+      return { text: '颜料架里没有找到合适的暖色候选。' };
+    },
+    cooler: () => {
+      const hsl = currentMixHsl();
+      if (!hsl) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
+      if (currentMixChroma() < MIN_CHROMA) {
+        return { text: '现在的颜色接近中性灰，冷暖差别不明显。先用「更鲜艳」找回一点色彩倾向，再谈冷暖更靠谱。' };
+      }
+      if (hueDist(hsl.h, 210) < 45) return { text: '现在已经偏冷调了，不太需要再往冷调整。' };
+      const cand = findNearestByHue(210, { exclude: mix.map(m=>m.idx), preferHigherC: true });
+      if (cand) return { text: `加一点「${PALETTE[cand.idx].name}」能把整体往冷调拉一点。`, candidate: cand.idx };
+      return { text: '颜料架里没有找到合适的冷色候选。' };
+    },
+  };
+
+  function renderAdviceOutput(result) {
+    const out = document.getElementById('adviceOutput');
+    let html = `<div class="advice-text">${result.text}</div>`;
+    if (result.candidate != null && result.candidate >= 0) {
+      const p = PALETTE[result.candidate];
+      const disabled = mix.some(m=>m.idx===result.candidate) || mix.length >= MAX_MIX;
+      html += `<button class="advice-try" data-idx="${result.candidate}" ${disabled?'disabled':''}><i style="background:${p.hex}"></i>试试加入「${p.name}」</button>`;
+    }
+    out.innerHTML = html;
+    out.style.display = 'block';
+    const tryBtn = out.querySelector('.advice-try');
+    if (tryBtn) tryBtn.addEventListener('click', ()=>{
+      const idx = +tryBtn.dataset.idx;
+      if (mix.some(m=>m.idx===idx) || mix.length>=MAX_MIX) return;
+      mix.push({ idx, amount: 30 });
+      render();
+    });
+  }
+
+  document.getElementById('adviceButtons').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-advice]');
+    if (!btn) return;
+    const result = ADVICE[btn.dataset.advice]();
+    renderAdviceOutput(result);
+  });
 
   // 目标色单独渲染：调色盘为空时也要能跟着「换一个」刷新，不能跟着上面一起提前 return
   function renderTarget() {
@@ -669,12 +950,20 @@
     else label.textContent = `还有点距离，${score} 分`;
   }
 
+  function refreshAdviceTryState() {
+    const btn = document.querySelector('.advice-try');
+    if (!btn) return;
+    const idx = +btn.dataset.idx;
+    btn.disabled = mix.some(m=>m.idx===idx) || mix.length >= MAX_MIX;
+  }
+
   function render() {
     renderPalette();
     renderMixList();
     renderResults();
     renderTarget();
     renderSavedRecipes();
+    refreshAdviceTryState();
   }
 
   // ---------- challenge mode ----------
