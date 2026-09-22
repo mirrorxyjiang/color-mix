@@ -781,6 +781,21 @@
     return raw ? rgbChroma(raw) : 0;
   }
 
+  // 「变柔和」的本质是朝中性灰靠近：降彩度，但不换色相。
+  // 把 c0→同明度灰 看成一条直线，看混合结果 c1 落在哪儿：
+  // progress = 朝灰走了多少（>0 才算是变灰），deviation = 偏离这条灰化路径多远（0-100）。
+  // 黄+蓝 会变绿：彩度是降了，但它跑到黄→灰这条线外面去了，deviation 就会很大，据此排除。
+  function greyingPath(c0, c1) {
+    const g = (c0.r + c0.g + c0.b) / 3;
+    const d = { r: g - c0.r, g: g - c0.g, b: g - c0.b };
+    const len2 = d.r*d.r + d.g*d.g + d.b*d.b;
+    if (len2 < 1e-6) return { progress: 0, deviation: 0 };
+    const v = { r: c1.r - c0.r, g: c1.g - c0.g, b: c1.b - c0.b };
+    const t = (v.r*d.r + v.g*d.g + v.b*d.b) / len2;
+    const px = v.r - t*d.r, py = v.g - t*d.g, pz = v.b - t*d.b;
+    return { progress: t, deviation: Math.sqrt(px*px + py*py + pz*pz) / 2.55 };
+  }
+
   function findNearestByHue(targetHue, opts = {}) {
     const exclude = opts.exclude || [];
     const minC = opts.minC != null ? opts.minC : MIN_CHROMA;
@@ -864,18 +879,48 @@
       return { text: '这个组合已经比较鲜艳了。' };
     },
     muted: () => {
-      const hsl = currentMixHsl();
-      if (!hsl) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
-      const targetHue = (hsl.h + 180) % 360;
-      const cand = findNearestByHue(targetHue, { exclude: mix.map(m=>m.idx) });
-      if (cand) {
-        return { text: `加一点点「${PALETTE[cand.idx].name}」（它偏向现在这个颜色的补色方向），少量就能让颜色变柔和、更接近大地色，比直接加黑灰更自然——但加多了会变成灰褐色，注意用量。`, candidate: cand.idx };
+      const base = basePigmentMix(mix);
+      if (!base) return { text: '先在调色盘里加入至少一种颜料，我才能给建议。' };
+      if (currentMixChroma() < MIN_CHROMA) {
+        return { text: '现在的颜色已经接近黑白灰，再柔化只会更脏。想调整的话，先试试「更鲜艳」找回一点色彩。' };
+      }
+      const baseHsl = rgbToHsl(base);
+      const baseC = rgbChroma(base);
+      const exclude = mix.map(m=>m.idx);
+      const total = mix.reduce((s,m)=>s+m.amount,0) || 100;
+      const trialAmount = Math.max(8, Math.round(total * 0.18));
+
+      // 不拿「色相 +180」当补色：那是加色/屏幕空间的反相，黄的反相是蓝，
+      // 可真实颜料里黄+蓝=绿，只会把颜色带跑偏，不会变柔和。
+      // 这里直接用混色引擎把候选一个个试加进去，挑彩度降得下去、色相又不跑偏的那个。
+      let best = null, bestScore = -Infinity;
+      PALETTE.forEach((p, idx) => {
+        if (exclude.includes(idx)) return;
+        if (rgbChroma(hexToRgb(p.hex)) < MIN_CHROMA) return;
+        const res = basePigmentMix(mix.concat([{ idx, amount: trialAmount }]));
+        if (!res) return;
+        const resHsl = rgbToHsl(res);
+        const softened = baseC - rgbChroma(res);            // 彩度降得越多越好
+        const hueShift = hueDist(resHsl.h, baseHsl.h);      // 换色相的不算"变柔和"
+        const lightShift = Math.abs(resHsl.l - baseHsl.l);  // 明暗不该跳变
+        if (softened < 1.5 || lightShift > 20 || hueShift > 25) return;
+        const path = greyingPath(base, res);
+        if (path.progress < 0.05) return;                   // 压根没朝灰走，只是在换色
+        const score = softened - path.deviation * 1.5 - hueShift * 0.3 - lightShift * 0.18;
+        if (score > bestScore) { bestScore = score; best = { idx, softened }; }
+      });
+
+      if (best) {
+        return {
+          text: `加一点点「${PALETTE[best.idx].name}」：把候选一个个试加进去算过，它是最能压住当前纯度、又不会把色相带跑偏的那个。少量就能变柔和、更接近大地色，比直接加黑灰自然——但加多了会成灰褐色，注意用量。`,
+          candidate: best.idx,
+        };
       }
       const black = PALETTE.findIndex(p=>p.name==='象牙黑');
       if (mix.some(m=>m.idx===black)) {
-        return { text: '颜料架里暂时没有合适的补色候选了。调色盘里已经有象牙黑，可以再少量加一点，但用量要克制，多了会发闷。' };
+        return { text: '试下来没有哪种颜料能在不跑偏色相的前提下压住纯度了。调色盘里已经有象牙黑，可以再少量加一点，但用量要克制，多了会发闷。' };
       }
-      return { text: '也可以直接加一点点象牙黑，但用量要克制。', candidate: black };
+      return { text: '试下来没有合适的颜料能柔和地压住纯度，也可以直接加一点点象牙黑，但用量要克制。', candidate: black };
     },
     warmer: () => {
       const hsl = currentMixHsl();
